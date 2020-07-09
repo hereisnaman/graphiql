@@ -17,140 +17,35 @@
  *        is supplied.
  *
  */
-import { TokenPattern, CharacterStreamInterface } from './types';
+import { CharacterStreamInterface, Token, LexerToken } from './types';
+import { Lexer, Source } from 'graphql';
+import * as LexerUtils from 'graphql/language/lexer';
+
+const { isPunctuatorTokenKind } = LexerUtils as any;
 
 export default class CharacterStream implements CharacterStreamInterface {
   _start: number;
   _pos: number;
-  _sourceText: string;
+  _lexer: Lexer;
 
   constructor(sourceText: string) {
     this._start = 0;
     this._pos = 0;
-    this._sourceText = sourceText;
+    this._lexer = new Lexer(new Source(sourceText));
   }
 
   getStartOfToken = (): number => this._start;
 
   getCurrentPosition = (): number => this._pos;
 
-  _testNextCharacter(pattern: TokenPattern): boolean {
-    const character = this._sourceText.charAt(this._pos);
-    let isMatched = false;
-    if (typeof pattern === 'string') {
-      isMatched = character === pattern;
-    } else {
-      isMatched =
-        pattern instanceof RegExp
-          ? pattern.test(character)
-          : pattern(character);
-    }
-    return isMatched;
-  }
-
-  eol = (): boolean => this._sourceText.length === this._pos;
+  eol = (): boolean => !this.lookAhead();
 
   sol = (): boolean => this._pos === 0;
-
-  peek = (): string | null => {
-    return this._sourceText.charAt(this._pos)
-      ? this._sourceText.charAt(this._pos)
-      : null;
-  };
-
-  next = (): string => {
-    const char = this._sourceText.charAt(this._pos);
-    this._pos++;
-    return char;
-  };
-
-  eat = (pattern: TokenPattern): string | undefined => {
-    const isMatched = this._testNextCharacter(pattern);
-    if (isMatched) {
-      this._start = this._pos;
-      this._pos++;
-      return this._sourceText.charAt(this._pos - 1);
-    }
-    return undefined;
-  };
-
-  eatWhile = (match: TokenPattern): boolean => {
-    let isMatched = this._testNextCharacter(match);
-    let didEat = false;
-
-    // If a match, treat the total upcoming matches as one token
-    if (isMatched) {
-      didEat = isMatched;
-      this._start = this._pos;
-    }
-
-    while (isMatched) {
-      this._pos++;
-      isMatched = this._testNextCharacter(match);
-      didEat = true;
-    }
-
-    return didEat;
-  };
-
-  eatSpace = (): boolean => this.eatWhile(/[\s\u00a0]/);
-
-  skipToEnd = (): void => {
-    this._pos = this._sourceText.length;
-  };
-
-  skipTo = (position: number): void => {
-    this._pos = position;
-  };
-
-  match = (
-    pattern: TokenPattern,
-    consume: boolean | null | undefined = true,
-    caseFold: boolean | null | undefined = false,
-  ): Array<string> | boolean => {
-    let token = null;
-    let match = null;
-
-    if (typeof pattern === 'string') {
-      const regex = new RegExp(pattern, caseFold ? 'i' : 'g');
-      match = regex.test(this._sourceText.substr(this._pos, pattern.length));
-      token = pattern;
-    } else if (pattern instanceof RegExp) {
-      match = this._sourceText.slice(this._pos).match(pattern);
-      token = match && match[0];
-    }
-
-    if (match != null) {
-      if (
-        typeof pattern === 'string' ||
-        (match instanceof Array &&
-          // String.match returns 'index' property, which flow fails to detect
-          // for some reason. The below is a workaround, but an easier solution
-          // is just checking if `match.index === 0`
-          this._sourceText.startsWith(match[0], this._pos))
-      ) {
-        if (consume) {
-          this._start = this._pos;
-          if (token && token.length) {
-            this._pos += token.length;
-          }
-        }
-        return match;
-      }
-    }
-
-    // No match available.
-    return false;
-  };
-
-  backUp = (num: number): void => {
-    this._pos -= num;
-  };
 
   column = (): number => this._pos;
 
   indentation = (): number => {
-    const match = this._sourceText.match(/\s*/);
+    const match = this._lexer.source.body.match(/\s*/);
     let indent = 0;
     if (match && match.length !== 0) {
       const whitespaces = match[0];
@@ -168,5 +63,59 @@ export default class CharacterStream implements CharacterStreamInterface {
     return indent;
   };
 
-  current = (): string => this._sourceText.slice(this._start, this._pos);
+  current = (): string => this._lexer.source.body.slice(this._start, this._pos);
+
+  _transformLexerToken = (token: LexerToken): Token | null => {
+    const { kind, value } = token;
+    if (kind === '<EOF>') {
+      return null;
+    }
+
+    if (['Int', 'Float'].includes(kind)) {
+      return { kind: 'Number', value };
+    }
+
+    if (kind === 'BlockString') {
+      return { kind: 'String', value: `"${value}"` };
+    }
+
+    if (isPunctuatorTokenKind(kind)) {
+      return { kind: 'Punctuation', value: kind };
+    }
+
+    if (kind === 'String') {
+      return { kind, value: `"${value}"` };
+    }
+
+    if (value === undefined) {
+      throw new Error('Invalid token returned from lexer');
+    }
+
+    return { kind, value };
+  };
+
+  advance = (): Token | null => {
+    try {
+      const lexerToken = this._lexer.advance();
+      const token = this._transformLexerToken(lexerToken);
+      if (!token) {
+        return token;
+      }
+
+      this._start += lexerToken.column - 1;
+      this._pos = this._start + token.value.length;
+
+      return token;
+    } catch (err) {
+      return null;
+    }
+  };
+
+  lookAhead = (): Token | null => {
+    try {
+      return this._transformLexerToken(this._lexer.lookahead());
+    } catch (err) {
+      return null;
+    }
+  };
 }
