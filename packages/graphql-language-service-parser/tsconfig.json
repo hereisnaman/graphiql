@@ -10,6 +10,6 @@
       "path": "../graphql-language-service-types"
     }
   ],
-  "include": ["src"],
+  "include": ["src", "benchmark"],
   "exclude": ["**/__tests__/**", "**/*.spec.*"]
 }
