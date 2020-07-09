@@ -9,7 +9,7 @@
 
 export { default as CharacterStream } from './CharacterStream';
 
-export { LexRules, ParseRules, isIgnored } from './Rules';
+export { ParseRules } from './Rules';
 
 export { butNot, list, opt, p, t } from './RuleHelpers';
 

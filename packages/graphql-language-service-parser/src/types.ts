@@ -124,20 +124,14 @@ export interface CharacterStreamInterface {
   getCurrentPosition: () => number;
   eol: () => boolean;
   sol: () => boolean;
-  peek: () => string | null;
-  next: () => string;
-  eat: (pattern: TokenPattern) => string | undefined;
-  eatWhile: (match: TokenPattern) => boolean;
-  eatSpace: () => boolean;
-  skipToEnd: () => void;
-  skipTo: (position: number) => void;
-  match: (
-    pattern: TokenPattern,
-    consume?: Maybe<boolean>,
-    caseFold?: Maybe<boolean>,
-  ) => string[] | boolean;
-  backUp: (num: number) => void;
   column: () => number;
   indentation: () => number;
   current: () => string;
+}
+
+export interface LexerToken {
+  kind: string;
+  value: string | undefined;
+  line: number;
+  column: numner;
 }
