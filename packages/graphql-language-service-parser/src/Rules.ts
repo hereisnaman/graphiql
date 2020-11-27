@@ -12,38 +12,6 @@ import CharacterStream from './CharacterStream';
 import { opt, list, butNot, t, p } from './RuleHelpers';
 
 /**
- * Whitespace tokens defined in GraphQL spec.
- */
-export const isIgnored = (ch: string) =>
-  ch === ' ' ||
-  ch === '\t' ||
-  ch === ',' ||
-  ch === '\n' ||
-  ch === '\r' ||
-  ch === '\uFEFF' ||
-  ch === '\u00A0';
-
-/**
- * The lexer rules. These are exactly as described by the spec.
- */
-export const LexRules = {
-  // The Name token.
-  Name: /^[_A-Za-z][_0-9A-Za-z]*/,
-
-  // All Punctuation used in GraphQL
-  Punctuation: /^(?:!|\$|\(|\)|\.\.\.|:|=|@|\[|]|\{|\||\})/,
-
-  // Combines the IntValue and FloatValue tokens.
-  Number: /^-?(?:0|(?:[1-9][0-9]*))(?:\.[0-9]*)?(?:[eE][+-]?[0-9]+)?/,
-
-  // Note the closing quote is made optional as an IDE experience improvment.
-  String: /^(?:"""(?:\\"""|[^"]|"[^"]|""[^"])*(?:""")?|"(?:[^"\\]|\\(?:"|\/|\\|b|f|n|r|t|u[0-9a-fA-F]{4}))*"?)/,
-
-  // Comments consume entire lines.
-  Comment: /^#.*/,
-};
-
-/**
  * The parser rules. These are very close to, but not exactly the same as the
  * spec. Minor deviations allow for a simpler implementation. The resulting
  * parser can parse everything the spec declares possible.
@@ -115,10 +83,10 @@ export const ParseRules: { [name: string]: ParseRule } = {
   SelectionSet: [p('{'), list('Selection'), p('}')],
   Selection(token: Token, stream: CharacterStream) {
     return token.value === '...'
-      ? stream.match(/[\s\u00a0,]*(on\b|@|{)/, false)
+      ? /[\s\u00a0,]*(on\b|@|{)/.test(stream.lookAhead()?.value || '')
         ? 'InlineFragment'
         : 'FragmentSpread'
-      : stream.match(/[\s\u00a0,]*:/, false)
+      : /[\s\u00a0,]*:/.test(stream.lookAhead()?.value || '')
       ? 'AliasedField'
       : 'Field';
   },

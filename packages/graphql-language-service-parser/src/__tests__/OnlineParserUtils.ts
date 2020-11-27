@@ -29,12 +29,12 @@ export const getUtils = source => {
     parser.token(_stream, _state);
 
   const t = {
-    token({ pattern, type, kind = state.kind, eatSpace = true }, fn = token) {
-      if (eatSpace) {
-        stream.eatSpace();
-      }
-
-      expect(Boolean(stream.match(pattern, false))).toEqual(true);
+    token({ pattern, type, kind = state.kind }, fn = token) {
+      expect(
+        (pattern instanceof RegExp ? pattern : new RegExp(pattern)).test(
+          stream.lookAhead()?.value,
+        ),
+      ).toEqual(true);
       expect(fn()).toEqual(type);
       expect(state.kind).toEqual(kind);
     },
@@ -68,11 +68,7 @@ export const getUtils = source => {
     value(kind, pattern, options = {}) {
       this.token({ pattern, type: tokenTypeMap[kind], kind: options.kind });
     },
-    eol(eatSpace = true) {
-      if (eatSpace) {
-        stream.eatSpace();
-      }
-
+    eol() {
       expect(stream.eol()).toEqual(true);
     },
   };
@@ -99,8 +95,6 @@ export const expectVarsDef = ({ t, stream }, { onKind, vars = [] }) => {
     t.variable(variable.name);
     t.punctuation(':', { kind: 'VariableDefinition' });
     t.name(variable.type, { kind: 'NamedType' });
-
-    stream.eatWhile(/(,|\s)/);
   });
 
   t.punctuation(/\)/, { kind: onKind });
@@ -124,8 +118,6 @@ export const expectArgs = ({ t, stream }, { onKind, args = [] }) => {
         t.punctuation(/\]/, { kind: 'Arguments' });
       }
     }
-
-    stream.eatWhile(/(,|\s)/);
   });
 
   t.punctuation(/\)/, { kind: onKind });

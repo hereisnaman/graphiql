@@ -13,13 +13,6 @@
  *
  * Options:
  *
- *     eatWhitespace: (
- *       stream: Stream | CodeMirror.StringStream | CharacterStream
- *     ) => boolean
- *       Use CodeMirror API.
- *
- *     LexRules: { [name: string]: RegExp }, Includes `Punctuation`, `Comment`.
- *
  *     ParseRules: { [name: string]: Array<Rule> }, Includes `Document`.
  *
  *     editorConfig: { [name: string]: any }, Provides an editor-specific
@@ -27,26 +20,19 @@
  *
  */
 
-import {
-  LexRules as LexRulesType,
-  ParseRules as ParseRulesType,
-} from './Rules';
+import { ParseRules as ParseRulesType } from './Rules';
 import CharacterStream from './CharacterStream';
 import { State, Token, Rule, RuleKind } from './types';
 
-import { LexRules, ParseRules, isIgnored } from './Rules';
+import { ParseRules } from './Rules';
 
 type ParserOptions = {
-  eatWhitespace: (stream: CharacterStream) => boolean;
-  lexRules: typeof LexRulesType;
   parseRules: typeof ParseRulesType;
   editorConfig: { [name: string]: any };
 };
 
 export default function onlineParser(
   options: ParserOptions = {
-    eatWhitespace: stream => stream.eatWhile(isIgnored),
-    lexRules: LexRules,
     parseRules: ParseRules,
     editorConfig: {},
   },
@@ -81,7 +67,7 @@ function getToken(
   state: State,
   options: ParserOptions,
 ): string {
-  const { lexRules, parseRules, eatWhitespace, editorConfig } = options;
+  const { parseRules, editorConfig } = options;
   // Restore state after an empty-rule.
   if (state.rule && state.rule.length === 0) {
     popRule(state);
@@ -96,23 +82,11 @@ function getToken(
     state.indentLevel = Math.floor(stream.indentation() / tabSize);
   }
 
-  // Consume spaces and ignored characters
-  if (eatWhitespace(stream)) {
-    return 'ws';
-  }
-
   // Get a matched token from the stream, using lex
-  const token = lex(lexRules, stream);
+  const token = lex(stream);
 
-  // If there's no matching token, skip ahead.
+  // if there is no token, lexer reached the eol
   if (!token) {
-    const matchedSomething = stream.match(/\S+/);
-    if (!matchedSomething) {
-      // We need to eat at least one character, and we couldn't match any
-      // non-whitespace, so it must be exotic whitespace.
-      stream.match(/\s/);
-    }
-    pushRule(SpecialParseRules, state, 'Invalid');
     return 'invalidchar';
   }
 
@@ -333,17 +307,6 @@ function unsuccessful(state: State): void {
 }
 
 // Given a stream, returns a { kind, value } pair, or null.
-function lex(
-  lexRules: typeof LexRulesType,
-  stream: CharacterStream,
-): Token | null | undefined {
-  const kinds = Object.keys(lexRules);
-  for (let i = 0; i < kinds.length; i++) {
-    // @ts-ignore
-    // TODO: ParseRules as numerical index
-    const match = stream.match(lexRules[kinds[i]]);
-    if (match && match instanceof Array) {
-      return { kind: kinds[i], value: match[0] };
-    }
-  }
+function lex(stream: CharacterStream): Token | null {
+  return stream.advance();
 }
